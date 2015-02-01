@@ -1,30 +1,48 @@
-//Include Libraries
+/* include libraries */
 #include <ZumoMotors.h>
 #include <Pushbutton.h>
 #include <Wire.h>
 #include <LSM303.h>
+#include <QTRSensors.h>
+#include <ZumoReflectanceSensorArray.h>
 
 
-//Define CONSTANTS
+/* define constants */
 #define CAL_SPEED 200 // Maximum motor speed when going straight; variable speed when turning
 #define CALIBRATION_SAMPLES 100  // Number of compass readings to take when calibrating
 #define CRB_REG_M_2_5GAUSS 0x60 // CRB_REG_M value for magnetometer +/-2.5 gauss full scale
 #define CRA_REG_M_220HZ    0x1C // CRA_REG_M value for magnetometer 220 Hz update rate
 #define DEVIATION_THRESHOLD 10.0// Allowed deviation (in degrees) relative to target angle that must be achieved before driving straight
+#define SENSOR_THRESHOLD 100 //140?
+#define REVERSE_SPEED -150
+#define TURN_SPEED 100
+#define FORWARD_SPEED 150
+#define REVERSE_DURATION 100
+#define TURN_DURATION 100
+#define NUM_SENSORS 6
 
-//Define Classes
+
+/* assign mechanical variables */
 ZumoMotors motors;
 Pushbutton button(ZUMO_BUTTON);
 LSM303 compass;
 
-//Declare Functions
+
+/* assign digital variables */
+unsigned int sensor_values[NUM_SENSORS];
+ZumoReflectanceSensorArray sensors(QTR_NO_EMITTER_PIN);
+
+
+/* initialize functions */
 void calibrate();
 float heading();
 void rightTurn(float,int);
+void leftTurn(float,int);
 float relativeHeading(float,float);
 float avgHeading(int);
 
-// 
+
+/* set up function */
 void setup()
 {
   // Initiate Serial Communication
@@ -42,28 +60,46 @@ void setup()
 //#################################################################################################
 
 
+/* main loop */
 void loop()
 {
-// Wait for button push to start robot.
+ Wait for button push to start robot.
   button.waitForButton(); 
   
   int nsides = 4;
+  int MAXSIDECOUNT = 8;
+  int MINSIDECOUNT = 3;
   
-  for (int i=0; i<nsides; i++)
+  float turn = 360/nsides;
+  
+  for (int j=MAXSIDECOUNT; j>=MINSIDECOUNT; j--)
   {
-    motors.setSpeeds(250,250);
+    int nsides = j;
+    float turn = (360/nsides);
+    
+    for (int i=0; i<nsides; i++)
+    {
+      motors.setSpeeds(250,250);
+      delay(450);
+      motors.setSpeeds(100,100);
+      delay(50);
+      motors.setSpeeds(0,0);
+      rightTurn(turn,100);
+    }
+    
     delay(500);
-    motors.setSpeeds(0,0);
-    rightTurn(90,200);
-   } 
+  }
   
-
- 
+  
+  
 }
 
 //#################################################################################################
 //  DO NOT MAKE CHANGES BELOW THIS LINE
 //#################################################################################################
+
+
+/* calibrate the compass */
 void calibrate()
 {
   // Initiate LSM303
@@ -111,6 +147,9 @@ void calibrate()
 } 
 
 //#################################################################################################
+
+
+/* current direction */
 float heading()
 {
   // Returns the current heading of the robot in degrees.
@@ -126,6 +165,9 @@ float heading()
   return angle;
 }
 //#################################################################################################
+
+
+/* heading relative to goal direction */
 float relativeHeading(float heading_from, float heading_to)
 {
   float relative_heading = heading_to - heading_from;
@@ -141,6 +183,9 @@ float relativeHeading(float heading_from, float heading_to)
 
 
 //#################################################################################################
+
+
+/* turn right */
 void rightTurn(float turn_angle,int turn_speed)
 {
   float init_heading = heading();
@@ -149,7 +194,7 @@ void rightTurn(float turn_angle,int turn_speed)
   while(delta>20)
   {
    motors.setSpeeds(turn_speed,-turn_speed);
-   delay(5);
+   delay(4);
    delta = relativeHeading(heading(), fmod(init_heading+turn_angle, 360))*1.0;
    }
 
@@ -157,12 +202,13 @@ void rightTurn(float turn_angle,int turn_speed)
   while(delta>5)
   {
    motors.setSpeeds(100,-100);
-   delay(5);
+   delay(4);
    delta = relativeHeading(heading(), fmod(init_heading+turn_angle, 360))*1.0;
    }
   
   motors.setSpeeds(0,0);
 }  
+
 
 //#################################################################################################
   float avgHeading(int j)
